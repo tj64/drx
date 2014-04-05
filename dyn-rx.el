@@ -84,10 +84,10 @@ Here are the possible types/formats of SPEC:
 
   - \"n,m\" :: (string) repeat n to m times
 
-  - other :: (any) DEFAULT-QUANTIFIER (or repeat >= 0 times)
+  - other :: (any) DEFAULT-QUANTIFIER (or repeat >= 1 times)
 
 See docstring of `drx-make' for more information."
-  (let ((fallback (or default-quantifier "\\{0,\\}")))
+  (let ((fallback (or default-quantifier "\\{1,\\}")))
     (cond
      ;; nil or empty string or white string
      ((or
@@ -106,25 +106,30 @@ See docstring of `drx-make' for more information."
 	     (car-as-num (and (stringp car-as-strg)
 			      (string-to-number car-as-strg)))
  	     (cadr-as-num (and (stringp cadr-as-strg)
-			      (string-to-number cadr-as-strg))))
-	(if (and (eq (length spec-split) 2)
-		 car-as-num cadr-as-num)
-		 (cond
-		  ;; "n,"
-		  ((and (> car-as-num 0)
-			(string= (cadr spec-split) ""))
-		   (format "\\{%d,\\}" car-as-num))
-		  ;; ",m"
-		  ((and (string= (car spec-split) "")
-			(> cadr-as-num 0))
-		   (format "\\{,%d\\}" cadr-as-num))
-		  ;; "n,m"
-		  ((and (> car-as-num 0) (> cadr-as-num 0))
-		   (format "\\{%d,%d\\}" car-as-num cadr-as-num))
-		  ;; other
-		  (t fallback))
-	  ;; other
-	  fallback)))
+			       (string-to-number cadr-as-strg))))
+	(cond
+	 ((and (eq (length spec-split) 2)
+	       car-as-num cadr-as-num)
+	  (cond
+	   ;; "n,"
+	   ((and (>= car-as-num 0)
+		 (string= (cadr spec-split) ""))
+	    (format "\\{%d,\\}" car-as-num))
+	   ;; ",m"
+	   ((and (string= (car spec-split) "")
+		 (>= cadr-as-num 0))
+	    (format "\\{,%d\\}" cadr-as-num))
+	   ;; "n,m"
+	   ((and (>= car-as-num 0) (>= cadr-as-num 0))
+	    (format "\\{%d,%d\\}" car-as-num cadr-as-num))
+	   ;; other
+	   (t fallback)))
+	 ((and (eq (length spec-split) 1)
+	       (member car-as-strg
+			'("*" "?" "+" "*?"  "+?" "??")))
+		car-as-strg)
+	 ;; other
+	 (t fallback))))
      ;; other
      (t fallback))))
 
@@ -149,11 +154,11 @@ See docstring of `drx-make' for more information."
 	     (lambda (--elem)
 	       (let ((--quantifier
 		      (or (cdr-safe --elem)
-			  (car-safe --elem)
+			  ;; (car-safe --elem)
 			  --elem)))
 		 (concat
 		  (if (consp --quantifier) "\\(" "")
-		  (or (car-safe --elem) rgxps)
+		  (or (car-safe (car-safe --elem)) rgxps)
 		  (if (consp --quantifier) "\\)" "")
 		  (cond
 		   ((not --quantifier) "")
@@ -163,17 +168,32 @@ See docstring of `drx-make' for more information."
 		   ((member --quantifier
 			    '("*" "?" "+" "*?"  "+?" "??"))
 		    --quantifier)
-		   (t (drx-calc-quantifier --quantifier ""))))))
+		   ((member --quantifier
+			    '("0" "2" "3" "4" "5" "6" "7" "8"))
+		    (concat "\\{" --quantifier "\\}"))
+		   ((and (stringp --quantifier)
+			 (string= --quantifier "1")) "")
+		   (t (drx-calc-quantifier
+		       (if (consp --quantifier)
+			   (car-safe --quantifier)
+			 --quantifier) ""))))))
 	     (cdr-safe lst) "")
 	    (cond
 	     ((and (car lst) (symbolp (car lst))) "\\)")
 	     ((member (car lst) '("*" "?" "+" "*?"  "+?" "??"))
 	      (concat "\\)" (car lst)))
-	     (t (drx-calc-quantifier (car lst) ""))))))
+	     ((member (car lst)
+		      '("0" "2" "3" "4" "5" "6" "7" "8"))
+	      (concat "\\)\\{" (car lst) "\\}"))
+	     ((string= (car lst) "1") "\\)")
+	     (t (let ((quant (drx-calc-quantifier (car lst) "")))
+		  (if (car lst)
+		      (concat "\\)" quant)
+		    quant)))))))
 
 ;;;;; Core Function
 
-(defun drx-make (rgxp &optional bolp stars eolp enclosing &rest rgxps)
+(defun drx (rgxp &optional bolp stars eolp enclosing &rest rgxps)
   "Make regexp from RGXP and optionally RGXPS.
 
 With BOLP non-nil, add `drx-BOL' at beginning of regexp, with
@@ -328,11 +348,13 @@ resulting regexp."
 		     (if (car-safe enclosing) "\\(" ""))
 		    (t "\\("))
 		   rgxp
-		   (case (car-safe enclosing)
-		     ((nil) "")
-		     ('alt "\\|")
-		     ('group "\\)\\(")
-		     (t "\\)"))
+		   (cond
+		    ((not enclosing) "")
+		    ((consp enclosing)
+		     (if (car-safe enclosing) "\\)" ""))
+		    ((eq enclosing 'alt) "\\|")
+		    ((eq enclosing 'group) "\\)\\(")
+		    (t "\\)"))
 		   processed-rgxps
 		   (cond
 		    ((not enclosing) "")
@@ -344,8 +366,8 @@ resulting regexp."
 
 ;;; Tests
 
-(ert-deftest drx-test-make ()
-  "Test return values of `drx-make'.
+(ert-deftest drx-test ()
+  "Test return values of function `drx'.
 Assumes the following variable definitions:
 
  (defvar drx-BOL \"^\"
@@ -358,130 +380,167 @@ Assumes the following variable definitions:
    \"Special character that signals headline(-level) in regexps.\")"
   ;; return identity
   (should (equal
-	   (drx-make "foo")
+	   (drx "foo")
 	   "foo"))
   ;; add drx-BOL
   (should (equal
-	   (drx-make "foo" t)
+	   (drx "foo" t)
 	   "^foo"))
   ;; append drx-EOL
   (should (equal
-	   (drx-make "foo" nil nil t)
+	   (drx "foo" nil nil t)
 	   "foo$"))
   ;; add drx-BOL and append drx-EOL
   (should (equal
-	   (drx-make "foo" t nil t)
+	   (drx "foo" t nil t)
 	   "^foo$"))
   ;; add drx-BOL and append drx-EOL
   ;; and add drx-STAR with default quantifier
   (should (equal
-	   (drx-make "foo" t t t)
-	   "^\\*\\{0,\\}foo$"))
+	   (drx "foo" t t t)
+	   "^\\*\\{1,\\}foo$"))
   (should (equal
-	   (drx-make "foo" t 'bar t)
-	   "^\\*\\{0,\\}foo$"))
+	   (drx "foo" t 'bar t)
+	   "^\\*\\{1,\\}foo$"))
   (should (equal
-	   (drx-make "foo" t "bar" t)
-	   "^\\*\\{0,\\}foo$"))
+	   (drx "foo" t "bar" t)
+	   "^\\*\\{1,\\}foo$"))
   ;; add drx-BOL and append drx-EOL
   ;; and add drx-STAR with specified quantifiers
   (should (equal
-	   (drx-make "foo" t "1," t)
-	   "^\\*\\{1,\\}foo$"))
+	   (drx "foo" t "0," t)
+	   "^\\*\\{0,\\}foo$"))
   (should (equal
-	   (drx-make "foo" t ",8" t)
+	   (drx "foo" t ",8" t)
 	   "^\\*\\{,8\\}foo$"))
   (should (equal
-	   (drx-make "foo" t "1,8" t)
+	   (drx "foo" t "1,8" t)
 	   "^\\*\\{1,8\\}foo$"))
   (should (equal
-	   (drx-make "foo" t "*" t)
-	   "^\\*\\{0,\\}foo$"))
+	   (drx "foo" t "*" t)
+	   "^\\**foo$"))
+  (should (equal
+	   (drx "foo" t "+" t)
+	   "^\\*+foo$"))
+  (should (equal
+	   (drx "foo" t "?" t)
+	   "^\\*?foo$"))
+  (should (equal
+	   (drx "foo" t "*?" t)
+	   "^\\**?foo$"))
+  (should (equal
+	   (drx "foo" t "+?" t)
+	   "^\\*+?foo$"))
+  (should (equal
+	   (drx "foo" t "??" t)
+	   "^\\*??foo$"))
   ;; add drx-STAR with specified quantifier list
   (should (equal
-	   (drx-make "foo" nil '(nil) nil)
+	   (drx "foo" nil '(nil) nil)
 	   "foo"))
   (should (equal
-	   (drx-make "foo" nil '(t) nil)
+	   (drx "foo" nil '(t) nil)
 	   "\\(\\)foo"))
   (should (equal
-	   (drx-make "foo" nil '(t nil) nil)
+	   (drx "foo" nil '(t nil) nil)
 	   "\\(\\*\\)foo"))
   (should (equal
-	   (drx-make "foo" nil '(t 1) nil)
+	   (drx "foo" nil '(t 1) nil)
 	   "\\(\\*\\)foo"))
   (should (equal
-	   (drx-make "foo" nil '(t t) nil)
+	   (drx "foo" nil '(t t) nil)
 	   "\\(\\**\\)foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "+") nil)
+	   (drx "foo" nil '(nil "+") nil)
 	   "\\*+foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "*") nil)
+	   (drx "foo" nil '(nil "*") nil)
 	   "\\**foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "?") nil)
+	   (drx "foo" nil '(nil "?") nil)
 	   "\\*?foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "+?") nil)
+	   (drx "foo" nil '(nil "+?") nil)
 	   "\\*+?foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "*?") nil)
+	   (drx "foo" nil '(nil "*?") nil)
 	   "\\**?foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "??") nil)
+	   (drx "foo" nil '(nil "??") nil)
 	   "\\*??foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "1,") nil)
+	   (drx "foo" nil '(nil "1,") nil)
 	   "\\*\\{1,\\}foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil ",2") nil)
+  	   (drx "foo" nil '(nil ("1,")) nil)
+  	   "\\(\\*\\)\\{1,\\}foo"))
+  (should (equal
+	   (drx "foo" nil '(nil ",2") nil)
 	   "\\*\\{,2\\}foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "1,2") nil)
+	   (drx "foo" nil '(nil (",2")) nil)
+	   "\\(\\*\\)\\{,2\\}foo"))
+  (should (equal
+	   (drx "foo" nil '(nil "1,2") nil)
 	   "\\*\\{1,2\\}foo"))
-  ;; FIXME
-  ;; (should (equal
-  ;; 	   (drx-make "foo" nil '(nil (2)) nil)
-  ;; 	   "\\(\\*\\{2\\}\\)foo"))
   (should (equal
-  	   (drx-make "foo" nil '(nil 2) nil)
+	   (drx "foo" nil '(nil ("1,2")) nil)
+	   "\\(\\*\\)\\{1,2\\}foo"))
+  (should (equal
+  	   (drx "foo" nil '(nil (2)) nil)
+  	   "\\(\\*\\)\\{2\\}foo"))
+  (should (equal
+  	   (drx "foo" nil '(nil 2) nil)
   	   "\\*\\{2\\}foo"))
-  ;; FIXME
-  ;; (should (equal
-  ;; 	   (drx-make "foo" nil '(nil (1)) nil)
-  ;; 	   "\\(\\*\\)foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil 1) nil)
+  	   (drx "foo" nil '(nil (1)) nil)
+  	   "\\(\\*\\)foo"))
+  (should (equal
+	   (drx "foo" nil '(nil 1) nil)
 	   "\\*foo"))
-  ;; FIXME
-  ;; (should (equal
-  ;; 	   (drx-make "foo" nil '(nil ("1,")) nil)
-  ;; 	   "\\*foo"))
-  ;; FIXME
-  ;; (should (equal
-  ;; 	   (drx-make "foo" nil '(nil ("2,3")) nil)
-  ;; 	   "\\*foo"))
   (should (equal
-	   (drx-make "foo" nil '(nil "2,3") nil)
-	   "\\*\\{2,3\\}foo"))
-  ;; temporarily change BOL and EOL using CSS comment syntax
+  	   (drx "foo" nil '(nil 2 ("2,3") "3") nil)
+  	   "\\*\\{2\\}\\(\\*\\)\\{2,3\\}\\*\\{3\\}foo"))
+  (should (equal
+  	   (drx "foo" nil '(",3" (2) ("2,3") 3) nil)
+  	   "\\(\\(\\*\\)\\{2\\}\\(\\*\\)\\{2,3\\}\\*\\{3\\}\\\)\\{,3\\}foo"))
+  ;; temporarily change BOL and EOL e.g. using CSS comment syntax
   (should (equal
 	   (let ((drx-BOL (concat "^" (regexp-quote "/* ")))
 		 (drx-EOL (concat (regexp-quote "*/") "$")))
-	     (drx-make "foo" t nil t))
+	     (drx "foo" t nil t))
 	   "^/\\* foo\\*/$"))
   ;; temporarily change STAR using Elisp syntax
   (should (equal
 	   (let ((drx-STAR ";"))
-	     (drx-make " foo" nil 2))
+	     (drx " foo" nil 2))
 	   ";\\{2\\} foo"))
-  ;; FIXME fix test! 
+  (should (equal
+	   (let ((drx-BOL "^;;")
+		 (drx-STAR ";"))
+	     (drx " foo" t '(2 2) nil))
+	   "^;;\\(;\\{2\\}\\)\\{2\\} foo"))
   ;; temporarily change STAR to whitespace syntax
-  ;; (should (equal
-  ;; 	   (let ((drx-STAR "[ \t]"))
-  ;; 	     (drx-make "foo" nil t))
-  ;; 	   "[ 	]\\{0,\\} foo"))
+  (should (equal
+  	   (let ((drx-STAR "[ \t]"))
+  	     (drx " foo" t "*"))
+  	   "^[ 	]* foo"))
+  ;; enclose rgxp
+  (should (equal
+	   (drx "foo" nil nil nil t)
+	   "\\(foo\\)"))
+  (should (equal
+	   (drx "foo" t t t t)
+	   "^\\*\\{1,\\}\\(foo\\)$"))
+  (should (equal
+	   (drx "foo" nil nil nil t)
+	   "\\(foo\\)"))
+  (should (equal
+	   (drx "foo" nil nil nil t)
+	   "\\(foo\\)"))
+
+  
+  
 )
 
 ;;; Provide
