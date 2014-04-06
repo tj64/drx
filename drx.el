@@ -481,7 +481,7 @@ Make test number or 1 or (1+ number of preceeding test). Increase test number of
 
 ;;;; ERT Tests
 
-(ert-deftest drx-test-3 ()
+(ert-deftest drx-test-1 ()
   "Test return values of function `drx'.
 Assumes the following variable definitions:
 
@@ -498,244 +498,244 @@ Assumes the following variable definitions:
 	   (drx "foo")
 	   "foo")))
 
-(ert-deftest drx-test-4 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-2 ()
+  "See docstring of `drx-test-1'."
   ;; add drx-BOL
   (should (equal
 	   (drx "foo" t)
 	   "^foo")))
 
-(ert-deftest drx-test-5 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-3 ()
+  "See docstring of `drx-test-1'."
   ;; append drx-EOL
   (should (equal
 	   (drx "foo" nil nil t)
 	   "foo$")))
 
-(ert-deftest drx-test-6 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-4 ()
+  "See docstring of `drx-test-1'."
   ;; add drx-BOL and append drx-EOL
   (should (equal
 	   (drx "foo" t nil t)
 	   "^foo$")))
 
-(ert-deftest drx-test-7 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-5 ()
+  "See docstring of `drx-test-1'."
   ;; add drx-BOL and append drx-EOL
   ;; and add drx-STAR with default quantifier
   (should (equal
 	   (drx "foo" t t t)
 	   "^\\*\\{1,\\}foo$")))
 
-(ert-deftest drx-test-8 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-6 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t 'bar t)
 	   "^\\*\\{1,\\}foo$")))
 
-(ert-deftest drx-test-9 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-7 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "bar" t)
 	   "^\\*\\{1,\\}foo$")))
 
-(ert-deftest drx-test-10 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-8 ()
+  "See docstring of `drx-test-1'."
   ;; add drx-BOL and append drx-EOL
   ;; and add drx-STAR with specified quantifiers
   (should (equal
 	   (drx "foo" t "0," t)
 	   "^\\*\\{0,\\}foo$")))
 
-(ert-deftest drx-test-11 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-9 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t ",8" t)
 	   "^\\*\\{,8\\}foo$")))
 
-(ert-deftest drx-test-12 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-10 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "1,8" t)
 	   "^\\*\\{1,8\\}foo$")))
 
-(ert-deftest drx-test-13 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-11 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "*" t)
 	   "^\\**foo$")))
 
-(ert-deftest drx-test-14 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-12 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "+" t)
 	   "^\\*+foo$")))
 
-(ert-deftest drx-test-15 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-13 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "?" t)
 	   "^\\*?foo$")))
 
-(ert-deftest drx-test-16 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-14 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "*?" t)
 	   "^\\**?foo$")))
 
-(ert-deftest drx-test-17 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-15 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "+?" t)
 	   "^\\*+?foo$")))
 
-(ert-deftest drx-test-18 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-16 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "??" t)
 	   "^\\*??foo$")))
 
-(ert-deftest drx-test-19 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-17 ()
+  "See docstring of `drx-test-1'."
   ;; add drx-STAR with specified quantifier list
   (should (equal
 	   (drx "foo" nil '(nil) nil)
 	   "foo")))
 
-(ert-deftest drx-test-20 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-18 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(t) nil)
 	   "\\(\\)foo")))
 
-(ert-deftest drx-test-21 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-19 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(t nil) nil)
   	   "\\(\\*\\)foo")))
 
-(ert-deftest drx-test-22 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-20 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(t 1) nil)
   	   "\\(\\*\\)foo")))
 
-(ert-deftest drx-test-23 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-21 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(t t) nil)
 	   "\\(\\**\\)foo")))
 
-(ert-deftest drx-test-24 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-22 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "+") nil)
 	   "\\*+foo")))
 
-(ert-deftest drx-test-25 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-23 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "*") nil)
 	   "\\**foo")))
 
-(ert-deftest drx-test-26 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-24 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "?") nil)
 	   "\\*?foo")))
 
-(ert-deftest drx-test-27 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-25 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "+?") nil)
 	   "\\*+?foo")))
 
-(ert-deftest drx-test-28 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-26 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "*?") nil)
 	   "\\**?foo")))
 
-(ert-deftest drx-test-29 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-27 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "??") nil)
 	   "\\*??foo")))
 
-(ert-deftest drx-test-30 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-28 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "1,") nil)
 	   "\\*\\{1,\\}foo")))
 
-(ert-deftest drx-test-31 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-29 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil ("1,")) nil)
   	   "\\(\\*\\)\\{1,\\}foo")))
 
-(ert-deftest drx-test-32 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-30 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil ",2") nil)
 	   "\\*\\{,2\\}foo")))
 
-(ert-deftest drx-test-33 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-31 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil (",2")) nil)
 	   "\\(\\*\\)\\{,2\\}foo")))
 
-(ert-deftest drx-test-34 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-32 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "1,2") nil)
 	   "\\*\\{1,2\\}foo")))
 
-(ert-deftest drx-test-35 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-33 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil ("1,2")) nil)
 	   "\\(\\*\\)\\{1,2\\}foo")))
 
-(ert-deftest drx-test-36 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-34 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil (2)) nil)
   	   "\\(\\*\\)\\{2\\}foo")))
 
-(ert-deftest drx-test-37 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-35 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil 2) nil)
   	   "\\*\\{2\\}foo")))
 
-(ert-deftest drx-test-38 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-36 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil (1)) nil)
   	   "\\(\\*\\)foo")))
 
-(ert-deftest drx-test-39 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-37 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil 1) nil)
 	   "\\*foo")))
 
-(ert-deftest drx-test-40 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-38 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil 2 ("2,3") "3") nil)
   	   "\\*\\{2\\}\\(\\*\\)\\{2,3\\}\\*\\{3\\}foo")))
 
-(ert-deftest drx-test-41 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-39 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(",3" (2) ("2,3") 3) nil)
   	   "\\(\\(\\*\\)\\{2\\}\\(\\*\\)\\{2,3\\}\\*\\{3\\}\\\)\\{,3\\}foo")))
 
-(ert-deftest drx-test-42 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-40 ()
+  "See docstring of `drx-test-1'."
   ;; temporarily change BOL and EOL e.g. using CSS comment syntax
   (should (equal
 	   (let ((drx-BOL (concat "^" (regexp-quote "/* ")))
@@ -743,135 +743,135 @@ Assumes the following variable definitions:
 	     (drx "foo" t nil t))
 	   "^/\\* foo\\*/$")))
 
-(ert-deftest drx-test-43 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-41 ()
+  "See docstring of `drx-test-1'."
   ;; temporarily change STAR using Elisp syntax
   (should (equal
 	   (let ((drx-STAR ";"))
 	     (drx " foo" nil 2))
 	   ";\\{2\\} foo")))
 
-(ert-deftest drx-test-44 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-42 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (let ((drx-BOL "^;;")
 		 (drx-STAR ";"))
 	     (drx " foo" t '(2 2) nil))
 	   "^;;\\(;\\{2\\}\\)\\{2\\} foo")))
 
-(ert-deftest drx-test-45 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-43 ()
+  "See docstring of `drx-test-1'."
   ;; temporarily change STAR to whitespace syntax
   (should (equal
   	   (let ((drx-STAR "[ \t]"))
   	     (drx " foo" t "*"))
   	   "^[ 	]* foo")))
 
-(ert-deftest drx-test-46 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-44 ()
+  "See docstring of `drx-test-1'."
   ;; enclose rgxp
   (should (equal
 	   (drx "foo" nil nil nil t)
 	   "\\(foo\\)")))
 
-(ert-deftest drx-test-47 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-45 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t t t t)
 	   "^\\*\\{1,\\}\\(foo\\)$")))
 
-(ert-deftest drx-test-48 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-46 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'alt "bar")
 	   "\\(foo\\|bar\\)")))
 
-(ert-deftest drx-test-49 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-47 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'group "bar")
 	   "\\(foo\\)\\(bar\\)")))
 
-(ert-deftest drx-test-50 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-48 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'shy "bar")
 	   "\\(?:foo\\)\\(?:bar\\)")))
 
-(ert-deftest drx-test-51 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-49 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'append "bar")
 	   "\\(foo\\)\\(bar\\)")))
 
-(ert-deftest drx-test-52 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-50 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'append "\\(bar\\)")
 	   "\\(foo\\)\\(bar\\)")))
 
-(ert-deftest drx-test-53 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-51 ()
+  "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'group "\\(bar\\)")
 	   "\\(foo\\)\\(\\(bar\\)\\)")))
 
-(ert-deftest drx-test-54 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-52 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil 'alt "bar")
   	   "\\(foo\\|bar\\)")))
 
-(ert-deftest drx-test-55 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-53 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil t)
   	   "\\(foo\\)")))
 
-(ert-deftest drx-test-56 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-54 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil 2)
   	   "\\(foo\\)\\{2\\}")))
 
-(ert-deftest drx-test-57 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-55 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "2")
   	   "\\(foo\\)\\{2\\}")))
 
-(ert-deftest drx-test-58 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-56 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil 1)
   	   "\\(foo\\)")))
 
-(ert-deftest drx-test-59 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-57 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "1")
   	   "\\(foo\\)")))
 
-(ert-deftest drx-test-60 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-58 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "1,")
   	   "\\(foo\\)\\{1,\\}")))
 
-(ert-deftest drx-test-61 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-59 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil ",1")
   	   "\\(foo\\)\\{,1\\}")))
 
-(ert-deftest drx-test-62 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-60 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "1,3")
   	   "\\(foo\\)\\{1,3\\}")))
 
-(ert-deftest drx-test-63 ()
-  "See docstring of `drx-test-3'."
+(ert-deftest drx-test-61 ()
+  "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "bar")
   	   "\\(foo\\)\\{1,\\}")))
