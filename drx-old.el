@@ -184,18 +184,12 @@ results."
 	       (let ((--quantifier
 		      (if zip-list (cdr-safe --elem) --elem)))
 		 (concat
-		  (if (and --quantifier
-			   (or (symbolp --quantifier)
-			       (consp --quantifier)))
-		      "\\(" "")
+		  (if (consp --quantifier) "\\(" "")
 		  (if zip-list
 		      (or (car-safe (car-safe --elem))
 			  (car-safe --elem))
 		    rgxps)
-		  (if (and --quantifier
-			   (or (symbolp --quantifier)
-			       (consp --quantifier)))
-		      "\\)" "")
+		  (if (consp --quantifier) "\\)" "")
 		  (cond
 		   ((or (not --quantifier)
 			(symbolp --quantifier)
@@ -304,17 +298,13 @@ above:
  ,------------------------------------------------------
  | (drx \"foo\" t '(nil t (2)) t '(t nil (2))
  |      \"bar\" \"loo\")
-
- ;; | \"^\\*\\(\\*\\)\\{2\\}\\(foobar\\(loo\\)\\{2\\}\\)$\"
-
+ | \"^\\*\\(\\*\\)\\{2\\}\\(foobar\\(loo\\)\\{2\\}\\)$\"
  `------------------------------------------------------
 
  ,------------------------------------------------------
  | (drx \"foo\" t '(t nil (2)) t '(nil t (2))
  |       \"bar\" \"loo\")
-
- ;; | \"^\\(\\*\\(\\*\\)\\{2\\}\\)foobar\\(loo\\)\\{2\\}$\"
-
+ | \"^\\(\\*\\(\\*\\)\\{2\\}\\)foobar\\(loo\\)\\{2\\}$\"
  `------------------------------------------------------
 
 Many more usage examples with their expected outcome can be found as
@@ -329,14 +319,14 @@ argument), namely:
            Eventually add drx-BOL/STARS and drx-EOL before
            first/after last alternative.
 
-  - grp :: Concat and enclose RGXP and RGXPS. Eventually add
+  - group :: Concat and enclose RGXP and RGXPS. Eventually add
              drx-BOL, STARS and drx-EOL as first/second/last group.
 
   - shy :: Concat and enclose RGXP and RGXPS as shy regexp
            groups. Eventually add drx-BOL, STARS and drx-EOL as
            first/second/last group.
 
-  - app :: like 'grp', but rather append RGXP and RGXPS instead
+  - append :: like 'group', but rather append RGXP and RGXPS instead
               of enclosing them if they are already regexp groups
               themselves.
 
@@ -364,7 +354,7 @@ They create regexp groups but don't apply repeaters to them."
 		 "")
 	       "\\)"
 	       (if eolp drx-EOL "")))
-      ('grp
+      ('group
        (concat (if bolp drx-BOL "")
 	       star-and-quantifier
 	       "\\(" rgxp "\\)"
@@ -384,7 +374,7 @@ They create regexp groups but don't apply repeaters to them."
 		    rgxps "")
 		 "")
 	       (if eolp drx-EOL "")))
-      ('app
+      ('append
        (concat (if bolp drx-BOL "")
 	       star-and-quantifier
 	       (or (drx-regexp-group-p rgxp)
@@ -644,7 +634,7 @@ Assumes the following variable definitions:
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(t t) nil)
-	   "\\(\\(\\*\\)\\)foo")))
+	   "\\(\\**\\)foo")))
 
 (ert-deftest drx-test-22 ()
   "See docstring of `drx-test-1'."
@@ -809,7 +799,7 @@ Assumes the following variable definitions:
 (ert-deftest drx-test-47 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" nil nil nil 'grp "bar")
+	   (drx "foo" nil nil nil 'group "bar")
 	   "\\(foo\\)\\(bar\\)")))
 
 (ert-deftest drx-test-48 ()
@@ -821,19 +811,19 @@ Assumes the following variable definitions:
 (ert-deftest drx-test-49 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" nil nil nil 'app "bar")
+	   (drx "foo" nil nil nil 'append "bar")
 	   "\\(foo\\)\\(bar\\)")))
 
 (ert-deftest drx-test-50 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" nil nil nil 'app "\\(bar\\)")
+	   (drx "foo" nil nil nil 'append "\\(bar\\)")
 	   "\\(foo\\)\\(bar\\)")))
 
 (ert-deftest drx-test-51 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" nil nil nil 'grp "\\(bar\\)")
+	   (drx "foo" nil nil nil 'group "\\(bar\\)")
 	   "\\(foo\\)\\(\\(bar\\)\\)")))
 
 (ert-deftest drx-test-52 ()
@@ -911,7 +901,7 @@ Assumes the following variable definitions:
 (ert-deftest drx-test-64 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" nil nil nil 'grp "bar" "loo")
+	   (drx "foo" nil nil nil 'group "bar" "loo")
 	   "\\(foo\\)\\(bar\\)\\(loo\\)")))
 
 (ert-deftest drx-test-65 ()
@@ -929,19 +919,19 @@ Assumes the following variable definitions:
 (ert-deftest drx-test-67 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" t t t 'app "\\(bar\\)" "loo")
+	   (drx "foo" t t t 'append "\\(bar\\)" "loo")
 	   "^\\*\\{1,\\}\\(foo\\)\\(bar\\)\\(loo\\)$")))
 
 (ert-deftest drx-test-68 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" t 1 t 'grp "\\(bar\\)" "loo")
+	   (drx "foo" t 1 t 'group "\\(bar\\)" "loo")
 	   "^\\*\\(foo\\)\\(\\(bar\\)\\)\\(loo\\)$")))
 
 (ert-deftest drx-test-69 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" t 2 t 'app "\\(bar\\)" "loo")
+	   (drx "foo" t 2 t 'append "\\(bar\\)" "loo")
 	   "^\\*\\{2\\}\\(foo\\)\\(bar\\)\\(loo\\)$")))
 
 (ert-deftest drx-test-70 ()
