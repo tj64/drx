@@ -1,4 +1,4 @@
-dyn-rx
+drx
 ======
 
-Library for writing dynamic regular expressions in Emacs Lisp
+Declarative dynamic regular expressions for Emacs Lisp
