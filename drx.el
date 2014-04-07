@@ -21,10 +21,17 @@
 
 ;;; Commentary
 
-;; This library implements functionality for easy writing of regular
-;; expressions that are not hard-coded strings but rather function
-;; calls that dynamically calculate the regexp using a few variables
-;; that might be set to alter the final appearance of the regexp.
+;; This library implements functionality for writing dynamic regular
+;; expressions for Emacs Lisp in a declarative style.
+
+;; 'Dynamic' means that regexps are not (entirely) hard-coded
+;; strings anymore but rather function calls and thus dynamically
+;; calculated at run-time.
+
+;; 'Declarative' means that most of the grouping, enclosing and
+;; repeating boiler-plate syntax is not explicitly written down
+;; anymore but rather declared with minimal specifiers via function
+;; arguments.
 
 ;;; Requires
 
@@ -171,13 +178,11 @@ results."
 			(cons (pop specs-list)
 			      (mapcar* 'cons rgxps specs-list))))
 	 (lst (or zip-list specs-list)))
-    (concat (if (car lst) "\\(" "")
+    (concat (if (and (not zip-list) (car lst)) "\\(" "")
 	    (mapconcat
 	     (lambda (--elem)
 	       (let ((--quantifier
-		      (or (cdr-safe --elem)
-			  ;; (car-safe --elem)
-			  --elem)))
+		      (if zip-list (cdr-safe --elem) --elem)))
 		 (concat
 		  (if (consp --quantifier) "\\(" "")
 		  (if zip-list
@@ -187,14 +192,12 @@ results."
 		  (if (consp --quantifier) "\\)" "")
 		  (cond
 		   ((or (not --quantifier)
+			(symbolp --quantifier)
 			(and (stringp --quantifier)
 			     (string= --quantifier "1"))) "")
 		   ((integerp --quantifier)
-		    ;; (concat "\\{"
-		    ;; 	    (number-to-string --quantifier)
-		    ;; 	    "\\}"))
 		    (drx-calc-quantifier --quantifier))
-		   ((symbolp --quantifier) "*")
+		   ;; ((symbolp --quantifier) "*")
 		   ((member --quantifier
 			    '("*" "?" "+" "*?"  "+?" "??"))
 		    --quantifier)
@@ -208,107 +211,126 @@ results."
 			   (car-safe --quantifier)
 			 --quantifier) ""))))))
 	     (cdr-safe lst) "")
-	    (cond
-	     ((and (car lst) (symbolp (car lst))) "\\)")
-	     ((member (car lst) '("*" "?" "+" "*?"  "+?" "??"))
-	      (concat "\\)" (car lst)))
-	     ((member (car lst)
-		      '("0" "2" "3" "4" "5" "6" "7" "8"))
-	      (concat "\\)\\{" (car lst) "\\}"))
-	     ((and (stringp (car lst)) (string= (car lst) "1"))
-		   "\\)")
-	     (t (let ((quant (drx-calc-quantifier (car lst) "")))
-		  (if (car lst)
-		      (concat "\\)" quant)
-		    quant)))))))
+	    (unless zip-list
+	      (cond
+	       ((and (car lst) (symbolp (car lst))) "\\)")
+	       ((member (car lst) '("*" "?" "+" "*?"  "+?" "??"))
+		(concat "\\)" (car lst)))
+	       ((member (car lst)
+			'("0" "2" "3" "4" "5" "6" "7" "8"))
+		(concat "\\)\\{" (car lst) "\\}"))
+	       ((and (stringp (car lst)) (string= (car lst) "1"))
+		"\\)")
+	       (t (let ((quant (drx-calc-quantifier (car lst) "")))
+		    (if (car lst)
+			(concat "\\)" quant)
+		      quant))))))))
 
 ;;;;; Core Function
 
 (defun drx (rgxp &optional bolp stars eolp enclosing &rest rgxps)
-  "Make regexp from RGXP and optionally RGXPS.
+  "Make regexp combining RGXP and optional RGXPS.
 
-With BOLP non-nil, add `drx-BOL' at beginning of regexp, with
-EOLP non-nil add `drx-EOL' at end of regexp. 
+With BOLP non-nil, add 'drx-BOL' at beginning of regexp, with EOLP
+non-nil add 'drx-EOL' at end of regexp.
 
-STARS uses `drx-STAR' and repeats it depending on its value:
+STARS, when non-nil, uses 'drx-STAR' and encloses and repeats it.
 
-  - N :: (number) repeat N times
+ENCLOSING, when non-nil, takes RGXP and optional RGXPS and combines,
+encloses and repeats them.
 
-  - \"n,\" :: (string)  repeat >= n times
+While BOLP and EOLP are switches that don't do nothing when nil and
+insert whatever value 'drx-BOL' and 'drx-EOL' are set to when
+non-nil, both arguments STARS and ENCLOSING take either symbols,
+numbers, strings or (nested) lists as values and act conditional on
+the type.
 
-  - \",m\" :: (string)  repeat <= m times
+All the following 'atomic' argument values are valid for both STARS
+and ENCLOSING but with a slightly different meaning:
 
-  - \"n,m\" :: (string) repeat n to m times
+STARS: repeat 'drx-STAR' (without enclosing) conditional on argument
+value
 
-  - (nil (elem1) elem2 (elem3)... elemN) :: (list of elems and
-       sublists) match a group containing N elements, each of
-       either one of the four forms above (number or string) or a
-       list of length 1 itself with an integer, string or symbol
-       in its car. Elements that are lists are wrapped in a
-       subgroup.
+ENCLOSING: repeat enclosed combination of RGXP and RGXPS conditional
+on argument value
+
+  - nil :: do nothing (no repeater, no enclosing)
+
+  - t :: (and any other symbol w/o special meaning) repeat once
+
+  - n :: (number) repeat n times {n}
+
+  - \"n\" :: (number-as-string) repeat n times {n}
+
+  - \"n,\" :: (string) repeat >= n times {n,}
+
+  - \",m\" :: (string) repeat <= m times {,m}
+
+  - \"n,m\" :: (string) repeat n to m times {n,m}
        
-       The first list element is special as well for the whole
-       list as for each of its sublists and should be one of the
-       following values (the first two have different meaning for
-       the whole group and subgroups):
-       
-    - nil :: group not enclosed, subgroup enclosed without repeater
+  - \"?\" :: (string) repeat with ?
 
-    - t :: (or any other symbol) group enclosed without repeater,
-      subgroup enclosed with default repeater
+  - \"*\" :: (string) repeat with *
 
-    - \"?\" :: (sub)group enclosed with trailing ?
+  - \"+\" :: (string) repeat with +
 
-    - \"*\" :: (sub)group enclosed with trailing *
+  - \"??\" :: (string) repeat with ??
 
-    - \"+\" :: (sub)group enclosed with trailing +
+  - \"*?\" :: (string) repeat with *?
 
-    - \"*?\" :: (sub)group enclosed with trailing *?
+  - \"+?\" :: (string) repeat with +?
 
-    - \"+?\" :: (sub)group enclosed with trailing +?
+  - \"xyz\" :: (any other string) repeat once
 
-    - \"n,m\", \"n,\" or \",m\" :: (sub)group enclosed with
-         trailing repeater {n,m}, {n,} or {,m}
+These atomic values can be wrapped in a list and change their
+meaning then. In a list of length 1 they specify 'enclose element
+first, apply repeater then'. In a list of lenght > 1 the specifier
+in the car applies to the combination of all elements, while each of
+the specifiers in the cdr applies to one element only. In the case
+of argument STAR, an element is always 'drx-STAR'. In the case of
+argument ENCLOSING, a non-nil optional argument RGXPS represents the
+list of elements, each of them being a regexp string.
 
-  - other non-nil values :: (string or symbol) match >= 1 stars
+Here are two calls of 'drx' with interchanged list arguments to
+STARS and ENCLOSING and their return values, demonstrating the
+above:
 
-When STARS is nil, do not add stars to regexp.
+ ,------------------------------------------------------
+ | (drx \"foo\" t '(nil t (2)) t '(t nil (2))
+ |      \"bar\" \"loo\")
+ | \"^\\*\\(\\*\\)\\{2\\}\\(foobar\\(loo\\)\\{2\\}\\)$\"
+ `------------------------------------------------------
 
-ENCLOSING might take the symbol values
+ ,------------------------------------------------------
+ | (drx \"foo\" t '(t nil (2)) t '(nil t (2))
+ |       \"bar\" \"loo\")
+ | \"^\\(\\*\\(\\*\\)\\{2\\}\\)foobar\\(loo\\)\\{2\\}$\"
+ `------------------------------------------------------
+
+Many more usage examples with their expected outcome can be found as
+ERT tests in the test-section of drx.el and should be consulted in
+doubt.
+
+There are a few symbols with special meaning as values of the
+ENCLOSING argument (when used as atomic argument or as car of a list
+argument), namely:
  
-  - alt :: Concat and enclose RGXP and RGXPS as regexp
-           alternatives.  Eventually add drx-BOL/STARS and
-           drx-EOL before first/after last alternative.
+  - alt :: Concat and enclose RGXP and RGXPS as regexp alternatives.
+           Eventually add drx-BOL/STARS and drx-EOL before
+           first/after last alternative.
 
   - group :: Concat and enclose RGXP and RGXPS. Eventually add
-             drx-BOL, STARS and drx-EOL as first/second/last
-             group.
+             drx-BOL, STARS and drx-EOL as first/second/last group.
 
   - shy :: Concat and enclose RGXP and RGXPS as shy regexp
            groups. Eventually add drx-BOL, STARS and drx-EOL as
            first/second/last group.
 
-  - append :: like 'group', but rather append RGXP and RGXPS
-              instead of enclosing them if they are already
-              regexp groups themselves.
+  - append :: like 'group', but rather append RGXP and RGXPS instead
+              of enclosing them if they are already regexp groups
+              themselves.
 
-  - append :: like 'group', but rather append RGXP and RGXPS
-              instead of enclosing them if they are already
-              regexp groups themselves.
-
-  - (nil (elem1) elem2 (elem3)... elemN) :: (list of elems and
-       sublists) Just like the STARS argument, but the elem specs
-       are applied to elements of RGXPS instead to drx-STAR,
-       i.e. elem1 is applied to regexp1 in RGXPS, elem2 to
-       regexp2, ... elemN to regexpN.
-
-  - other non-nil values :: Concat and enclose RGXP and RGXPS as
-       one group. Eventually add drx-BOL, STARS and drx-EOL as
-       first/second/last group.
-
-When ENCLOSING is nil, simply concat RGXP and RGXPS and
-eventually add drx-BOL, STARS and drx-EOL at the beginning/end of
-resulting regexp."
+They create regexp groups but don't apply repeaters to them."
   (let* ((star (if stars drx-STAR ""))
 	 (quantifier
 	  (cond
@@ -392,15 +414,7 @@ resulting regexp."
 			    (concat "\\)"
 				    (drx-calc-quantifier
 				     enclosing "")))
-			 ;; ((symbolp enclosing) "\\)")
 			 (t "\\)")) "")
-		    ;; (cond
-		    ;;  ((not enclosing) "")
-		    ;;  ((consp enclosing)
-		    ;;   (if (car-safe enclosing) "\\)" ""))
-		    ;;  ((eq enclosing 'alt) "\\|")
-		    ;;  ((eq enclosing 'group) "\\)\\(")
-		    ;; (t "\\)"))
 		   processed-rgxps
 		   (if (org-string-nw-p processed-rgxps)
 		       (cond
@@ -415,14 +429,9 @@ resulting regexp."
 			 (concat "\\)"
 				 (drx-calc-quantifier
 				  enclosing "")))
-			;; ((symbolp enclosing) "\\)")
+			((consp enclosing)
+			 (if (car-safe enclosing) "\\)" ""))
 			(t "\\)")) "")
-		   ;; (cond
-		   ;;  ((not enclosing) "")
-		   ;;  ((consp enclosing)
-		   ;;   (if (memq (car-safe enclosing) '(alt group))
-		   ;;     "\\)" ""))
-		   ;;  (t ""))
 		   (if eolp drx-EOL "")))))))
 
 ;;;; Commands
@@ -464,7 +473,8 @@ resulting regexp."
 
 (defun drx-insert-ert-test-and-renumber ()
   "Insert ert-test template at point.
-Make test number or 1 or (1+ number of preceeding test). Increase test number of all following tests by 1."
+Make test number 1 or (1+ number of preceeding test). Increase
+test number of all following tests by 1."
   (interactive)
   (insert
    (format "%s%d%s\n%S\n%s\n%s\n%S%s\n"
@@ -481,6 +491,7 @@ Make test number or 1 or (1+ number of preceeding test). Increase test number of
 
 ;;;; ERT Tests
 
+;; return identity
 (ert-deftest drx-test-1 ()
   "Test return values of function `drx'.
 Assumes the following variable definitions:
@@ -493,36 +504,35 @@ Assumes the following variable definitions:
 
  (defvar drx-STAR (regexp-quote \"*\")
    \"Special character that signals headline(-level) in regexps.\")"
-  ;; return identity
   (should (equal
 	   (drx "foo")
 	   "foo")))
 
+;; add drx-BOL
 (ert-deftest drx-test-2 ()
   "See docstring of `drx-test-1'."
-  ;; add drx-BOL
   (should (equal
 	   (drx "foo" t)
 	   "^foo")))
 
+;; append drx-EOL
 (ert-deftest drx-test-3 ()
   "See docstring of `drx-test-1'."
-  ;; append drx-EOL
   (should (equal
 	   (drx "foo" nil nil t)
 	   "foo$")))
 
+;; add drx-BOL and append drx-EOL
 (ert-deftest drx-test-4 ()
   "See docstring of `drx-test-1'."
-  ;; add drx-BOL and append drx-EOL
   (should (equal
 	   (drx "foo" t nil t)
 	   "^foo$")))
 
+;; add drx-BOL and append drx-EOL
+;; and add drx-STAR with default quantifier
 (ert-deftest drx-test-5 ()
   "See docstring of `drx-test-1'."
-  ;; add drx-BOL and append drx-EOL
-  ;; and add drx-STAR with default quantifier
   (should (equal
 	   (drx "foo" t t t)
 	   "^\\*\\{1,\\}foo$")))
@@ -539,10 +549,10 @@ Assumes the following variable definitions:
 	   (drx "foo" t "bar" t)
 	   "^\\*\\{1,\\}foo$")))
 
+;; add drx-BOL and append drx-EOL
+;; and add drx-STAR with specified quantifiers
 (ert-deftest drx-test-8 ()
   "See docstring of `drx-test-1'."
-  ;; add drx-BOL and append drx-EOL
-  ;; and add drx-STAR with specified quantifiers
   (should (equal
 	   (drx "foo" t "0," t)
 	   "^\\*\\{0,\\}foo$")))
@@ -589,6 +599,7 @@ Assumes the following variable definitions:
 	   (drx "foo" t "+?" t)
 	   "^\\*+?foo$")))
 
+;; add drx-STAR with specified quantifier list
 (ert-deftest drx-test-16 ()
   "See docstring of `drx-test-1'."
   (should (equal
@@ -597,7 +608,6 @@ Assumes the following variable definitions:
 
 (ert-deftest drx-test-17 ()
   "See docstring of `drx-test-1'."
-  ;; add drx-STAR with specified quantifier list
   (should (equal
 	   (drx "foo" nil '(nil) nil)
 	   "foo")))
@@ -734,18 +744,18 @@ Assumes the following variable definitions:
   	   (drx "foo" nil '(",3" (2) ("2,3") 3) nil)
   	   "\\(\\(\\*\\)\\{2\\}\\(\\*\\)\\{2,3\\}\\*\\{3\\}\\\)\\{,3\\}foo")))
 
+;; temporarily change BOL and EOL e.g. using CSS comment syntax
 (ert-deftest drx-test-40 ()
   "See docstring of `drx-test-1'."
-  ;; temporarily change BOL and EOL e.g. using CSS comment syntax
   (should (equal
 	   (let ((drx-BOL (concat "^" (regexp-quote "/* ")))
 		 (drx-EOL (concat (regexp-quote "*/") "$")))
 	     (drx "foo" t nil t))
 	   "^/\\* foo\\*/$")))
 
+;; temporarily change STAR using Elisp syntax
 (ert-deftest drx-test-41 ()
   "See docstring of `drx-test-1'."
-  ;; temporarily change STAR using Elisp syntax
   (should (equal
 	   (let ((drx-STAR ";"))
 	     (drx " foo" nil 2))
@@ -759,17 +769,17 @@ Assumes the following variable definitions:
 	     (drx " foo" t '(2 2) nil))
 	   "^;;\\(;\\{2\\}\\)\\{2\\} foo")))
 
+;; temporarily change STAR to whitespace syntax
 (ert-deftest drx-test-43 ()
   "See docstring of `drx-test-1'."
-  ;; temporarily change STAR to whitespace syntax
   (should (equal
   	   (let ((drx-STAR "[ \t]"))
   	     (drx " foo" t "*"))
   	   "^[ 	]* foo")))
 
+;; enclose rgxp
 (ert-deftest drx-test-44 ()
   "See docstring of `drx-test-1'."
-  ;; enclose rgxp
   (should (equal
 	   (drx "foo" nil nil nil t)
 	   "\\(foo\\)")))
@@ -874,7 +884,92 @@ Assumes the following variable definitions:
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "bar")
-  	   "\\(foo\\)\\{1,\\}")))
+  	   "\\(foo\\)")))
+
+(ert-deftest drx-test-62 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil nil "bar" "loo")
+	   "foobarloo")))
+
+(ert-deftest drx-test-63 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil t "bar" "loo")
+	   "\\(foobarloo\\)")))
+
+(ert-deftest drx-test-64 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil 'group "bar" "loo")
+	   "\\(foo\\)\\(bar\\)\\(loo\\)")))
+
+(ert-deftest drx-test-65 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil 'alt "bar" "loo")
+	   "\\(foo\\|bar\\|loo\\)")))
+
+(ert-deftest drx-test-66 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" t nil t 'shy "bar" "loo")
+	   "^\\(?:foo\\)\\(?:bar\\)\\(?:loo\\)$")))
+
+(ert-deftest drx-test-67 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" t t t 'append "\\(bar\\)" "loo")
+	   "^\\*\\{1,\\}\\(foo\\)\\(bar\\)\\(loo\\)$")))
+
+(ert-deftest drx-test-68 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" t 1 t 'group "\\(bar\\)" "loo")
+	   "^\\*\\(foo\\)\\(\\(bar\\)\\)\\(loo\\)$")))
+
+(ert-deftest drx-test-69 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" t 2 t 'append "\\(bar\\)" "loo")
+	   "^\\*\\{2\\}\\(foo\\)\\(bar\\)\\(loo\\)$")))
+
+(ert-deftest drx-test-70 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil '(nil) "bar" "loo")
+	   "foobarloo")))
+
+(ert-deftest drx-test-71 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil '(nil nil) "bar" "loo")
+	   "foobarloo")))
+
+(ert-deftest drx-test-72 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil '(t) "bar" "loo")
+	   "\\(foobarloo\\)")))
+
+(ert-deftest drx-test-73 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil '(t t) "bar" "loo")
+	   "\\(foo\\(bar\\)loo\\)")))
+
+(ert-deftest drx-test-74 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil '(t nil t) "bar" "loo")
+	   "\\(foobar\\(loo\\)\\)")))
+
+(ert-deftest drx-test-75 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil '(t t t) "bar" "loo")
+	   "\\(foo\\(bar\\)\\(loo\\)\\)")))
+
 
 ;;; Provide
 
