@@ -159,65 +159,99 @@ results."
 				   (make-list length-diff nil))
 			   specs)
 		      specs))
-	 (zip-list (and (consp rgxps)
-			(cons (pop specs-list)
-			      (mapcar* 'cons rgxps specs-list))))
+	 (zip-list (when (consp rgxps)
+		     (cons (pop specs-list)
+			   (mapcar* 'cons rgxps specs-list))))
 	 (lst (or zip-list specs-list)))
-    (concat (if (and (not zip-list) (car lst)) "\\(" "")
-	    (mapconcat
-	     (lambda (--elem)
-	       (let ((--quantifier
-		      (if zip-list (cdr-safe --elem) --elem)))
-		 (concat
-		  ;; (if  --quantifier "\\(" "")
-		  (if (and --quantifier
-		  	   (or (symbolp --quantifier)
-		  	       (consp --quantifier)))
-		      "\\(" "")
-		  (if zip-list
-		      (or (car-safe (car-safe --elem))
-			  (car-safe --elem))
-		    rgxps)
-		  ;; (if  --quantifier "\\)" "")
-		  (if (and --quantifier
-		  	   (or (symbolp --quantifier)
-		  	       (consp --quantifier)))
-		      "\\)" "")
-		  (cond
-		   ((or (not --quantifier)
-			(symbolp --quantifier)
-			(and (stringp --quantifier)
-			     (string= --quantifier "1"))) "")
-		   ((integerp --quantifier)
-		    (drx-calc-quantifier --quantifier))
-		   ;; ((symbolp --quantifier) "*")
-		   ((member --quantifier
-			    '("*" "?" "+" "*?"  "+?" "??"))
-		    --quantifier)
-		   ((and (stringp --quantifier)
-			 (save-match-data
-			   (string-match "^[[:digit:]]+$"
-					 --quantifier)))
-		    (concat "\\{" --quantifier "\\}"))
-		   (t (drx-calc-quantifier
-		       (if (consp --quantifier)
-			   (car-safe --quantifier)
-			 --quantifier) ""))))))
-	     (cdr-safe lst) "")
-	    (unless zip-list
-	      (cond
-	       ((and (car lst) (symbolp (car lst))) "\\)")
-	       ((member (car lst) '("*" "?" "+" "*?"  "+?" "??"))
-		(concat "\\)" (car lst)))
-	       ((member (car lst)
-			'("0" "2" "3" "4" "5" "6" "7" "8"))
-		(concat "\\)\\{" (car lst) "\\}"))
-	       ((and (stringp (car lst)) (string= (car lst) "1"))
-		"\\)")
-	       (t (let ((quant (drx-calc-quantifier (car lst) "")))
-		    (if (car lst)
-			(concat "\\)" quant)
-		      quant))))))))
+    (concat
+     ;; enclose combined STARS or RGXPS?
+     (if (and (not zip-list) (car lst)) "\\(" "")
+     ;; combine STARS or RGXPS conditional on SPECS
+     (mapconcat
+      (lambda (--elem)
+	(let ((--quantifier
+	       (if zip-list
+		   ;; cdr of (rgxp . spec) cons pair
+		   (or (cdr-safe (cdr-safe --elem))
+		       (cdr-safe --elem))
+		 ;; elem of spec list
+		 --elem)))
+	  (concat
+	   ;; enclose STAR or RGXP?
+	   (cond
+	    ((and --quantifier
+		   (symbolp --quantifier)) "\\(")
+	    (zip-list
+	     (let ((--grp (car-safe (cdr-safe --elem))))
+	       ;; car matches "?:" and "?num:"
+	       (if (and (org-string-nw-p --grp)
+			(save-match-data
+			  (string-match
+			   "\\?[[:digit:]]*:" --grp)))
+		   (concat "\\(" --grp)
+		 (and --grp "\\("))))
+	    ((consp --quantifier) "\\(")
+	    (t ""))
+	   (if zip-list
+	       ;; RGXP
+	       (or (car-safe (car-safe --elem))
+		   (car-safe --elem))
+	     ;; STAR
+	     rgxps)
+	   ;; enclose STAR or RGXP?
+	   (if (and --quantifier
+		    (or (symbolp --quantifier)
+			(consp --quantifier)))
+	       "\\)" "")
+	   ;; add quantifier
+	   (cond
+	    ((or
+	      ;; repeater=nil
+	      (not --quantifier)
+	      ;; repeater=symbol
+	      (symbolp --quantifier)
+	      ;; repeater="1"
+	      (and (stringp --quantifier)
+		   (string= --quantifier "1"))) "")
+	    ;; repeater=int
+	    ((integerp --quantifier)
+	     (drx-calc-quantifier --quantifier))
+	    ;; repeater=int-as-string
+	    ((and (stringp --quantifier)
+		  (save-match-data
+		    (string-match "^[[:digit:]]+$"
+				  --quantifier)))
+	     (concat "\\{" --quantifier "\\}"))
+	    ;; repeater=operator
+	    ((member --quantifier
+		     '("*" "?" "+" "*?"  "+?" "??"))
+	     --quantifier)
+	    (t (drx-calc-quantifier
+		(if (consp --quantifier)
+		    ;; repeater=car-of-list
+		    (car-safe --quantifier)
+		  ;; else
+		  --quantifier) ""))))))
+      (cdr-safe lst) "")
+     (unless zip-list
+       (cond
+	;; enclose combined STARS or RGXPS?
+	((and (car lst) (symbolp (car lst))) "\\)")
+	;; 1st elem spec-list = operator
+	((member (car lst) '("*" "?" "+" "*?"  "+?" "??"))
+	 (concat "\\)" (car lst)))
+	;; 1st elem spec-list = int-as-string (not "1")
+	((member (car lst)
+		 '("0" "2" "3" "4" "5" "6" "7" "8"))
+	 (concat "\\)\\{" (car lst) "\\}"))
+	;; 1st elem spec-list = "1"
+	((and (stringp (car lst)) (string= (car lst) "1"))
+	 "\\)")
+	;; else calc quantifier
+	(t (let ((quant (drx-calc-quantifier (car lst) "")))
+	     (if (car lst)
+		 (concat "\\)" quant)
+	       quant))))))))
 
 ;;;;; Core Function
 
@@ -397,14 +431,14 @@ They create regexp groups but don't apply repeaters to them."
 		  (drx-process-specs-list enclosing rgxps))
 		 ;; RGXPS
 		 (rgxps (mapconcat 'identity rgxps ""))
-		 ;; not RGXPS
+		 ;; no RGXPS
 		 (t ""))))
 	   (concat
 	    ;; BOL
 	    (if bolp drx-BOL "")
 	    ;; STARS
 	    star-and-quantifier
-	    ;; enclose RGXP
+	    ;; enclose RGXP and RGXPS
 	    (cond
 	     ;; no ENCLOSING
 	     ((not enclosing) "")
@@ -412,7 +446,16 @@ They create regexp groups but don't apply repeaters to them."
 	     ((consp enclosing)
 	      (let ((--grp (car-safe enclosing)))
 		(cond
-		 ;; car matches "?:" and "?num:"
+		 ;; car is consp
+		 ((consp --grp)
+		  (if (and
+		       (org-string-nw-p (car-safe --grp))
+		       (save-match-data
+			 (string-match "\\?[[:digit:]]*:"
+				       (car-safe --grp))))
+		      (concat "\\(" (car-safe --grp) "\\(")))
+		 ;; car is non-white string and matches "?:" and
+		 ;; "?num:"
 		 ((and (org-string-nw-p --grp)
 		       (save-match-data
 			 (string-match
@@ -420,78 +463,72 @@ They create regexp groups but don't apply repeaters to them."
 		  (concat "\\(" --grp))
 		 ;; car is non-nil
 		 (--grp "\\(")
-		 ;; else
+		 ;; car is nil
 		 (t ""))))
 	     (t "\\("))
 	    ;; RGXP
 	    rgxp
-	    ;; no RGXPS => enclose RGXP
-	    (if (not (org-string-nw-p preprocessed-rgxps))
+	    ;; (optional) RGXPS
+	    (or preprocessed-rgxps "")
+	    ;; enclose RGXP and RGXPS
+	    (cond
+	     ;; no ENCLOSING
+	     ((not enclosing) "")
+	     ;; ENCLOSING is integer
+	     ((integerp enclosing)
+	      (if (eq enclosing 1)
+		  ;; int=1
+		  "\\)"
+		;; else
+		(concat "\\)\\{"
+			(number-to-string enclosing)
+			"\\}")))
+	     ;; ENCLOSING is non-white string
+	     ((org-string-nw-p enclosing)
+	      (concat "\\)"
+		      (drx-calc-quantifier
+		       enclosing "")))
+	     ;; ENCLOSING is list
+	     ((consp enclosing)
+	      (let ((--quant
+		     (car-safe enclosing)))
 		(cond
-		 ;; no ENCLOSING
-		 ((not enclosing) "")
-		 ;; ENCLOSING is integer
-		 ((integerp enclosing)
-		  (if (eq enclosing 1)
+		 ;; car is integer
+		 ((integerp --quant)
+		  (if (eq --quant 1)
 		      ;; int=1
 		      "\\)"
 		    ;; else
 		    (concat "\\)\\{"
-			    (number-to-string enclosing)
+			    (number-to-string --quant)
 			    "\\}")))
-		 ;; ENCLOSING is non-white string
-		 ((org-string-nw-p enclosing)
+		 ;; car is non-white string
+		 ((org-string-nw-p --quant)
 		  (concat "\\)"
 			  (drx-calc-quantifier
-			   enclosing "")))
-		 ;; ENCLOSING is list
-		 ((consp enclosing)
-		  (let ((--quant
-			 (car-safe (cdr-safe enclosing))))
+			   --quant "")))
+		 ;; car is consp
+		 ((consp --quant)
+		  (let ((--op (car-safe (cdr-safe --quant))))
 		    (cond
-		     ;; cdr is integer
-		     ((integerp --quant)
-		      (if (eq --quant 1)
-			  ;; int=1
-			  "\\)"
-			;; else
-			(concat "\\)\\{"
-				(number-to-string --quant)
-				"\\}"))
-		      ;; cdr is non-white string
-		      ((org-string-nw-p --quant)
-		       (concat "\\)"
-			       (drx-calc-quantifier
-				--quant "")))
-		      ;; else
-		      (t "\\)")))))
-		 ;; else
-		 (t "\\)")) "")
-	    ;; RGXPS
-	    preprocessed-rgxps
-	    ;; => enclose combined RGXP and RGXPS 
-	    (if (org-string-nw-p preprocessed-rgxps)
-		(cond
-		 ;; no ENCLOSING
-		 ((not enclosing) "")
-		 ;; ENCLOSING is integer
-		 ((integerp enclosing)
-		  (if (eq enclosing 1)
-		      ;; int=1
-		      "\\)"
-		    ;; else
-		    (concat "\\)\\{"
-			    (number-to-string enclosing)
-			    "\\}")))
-		 ;; ENCLOSING is non-white string 
-		 ((org-string-nw-p enclosing)
-		  (concat "\\)"
-			  (drx-calc-quantifier
-			   enclosing "")))
-		 ;; ENCLOSING is list
-		 ((consp enclosing)
-		  (if (car-safe enclosing) "\\)" ""))
-		 (t "\\)")) "")
+		     ((member --op '("*" "?" "+" "*?"  "+?" "??"))
+		      (concat "\\)" --op))
+		     ((member --op
+			      '("0" "2" "3" "4" "5" "6" "7" "8"))
+		      (concat "\\)\\{" --op "\\}"))
+		     ((and (stringp --op)
+			   (string= --op "1")) "\\)")
+		     ;; else calc quantifier
+		     (t (let ((op-as-quant
+			       (drx-calc-quantifier --op "")))
+			  (if --op (concat "\\)" op-as-quant)
+			    op-as-quant))))))
+		 ;; car is non-nil
+		 (--quant "\\)")
+		;; else
+		(t ""))))
+	     ;; else
+	     (t "\\)"))
 	    ;; EOL
 	    (if eolp drx-EOL "")))))))
 
@@ -1093,25 +1130,27 @@ Assumes the following variable definitions:
 		"bar" "loo")
 	   "^\\(\\*\\*\\)\\(foobarloo\\)$")))
 
-;; org-heading-regexp "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$"
 (ert-deftest drx-test-86 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*" t nil t)
+	   ;; org-heading-regexp
 	   "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$")))
 
-;; org-heading-regexp "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$"
 (ert-deftest drx-test-87 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "\\(?: +\\(.*?\\)\\)?[ \t]*" t '(t "+") t)
+	   ;; org-heading-regexp
 	   "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$")))
 
-;; org-heading-regexp "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$"
 (ert-deftest drx-test-88 ()
   "See docstring of `drx-test-1'."
   (should (equal
-	   (drx "foo" t '(t "+") t '("2" "?:" "*?") " " ".")
+	   (drx 
+	    (drx "" t '(t "+") nil '(("?:" "?") nil t) " +" ".*?")
+	    nil nil t '(nil "*")
+	    "[ \t]")
 	   "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$")))
 
 
