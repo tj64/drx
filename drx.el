@@ -77,28 +77,13 @@
   
 
 (defun drx-calc-quantifier (spec &optional default-quantifier)
-  "Calculate a regexp quantifier based on SPEC.
-
-Here are the possible types/formats of SPEC:
-
-  - nil or "" or "  " :: don't repeat
-
-  - N :: (number) repeat exactly N times
-
-  - \"n,\" :: (string) repeat >= n times
-
-  - \",m\" :: (string) repeat <= m times
-
-  - \"n,m\" :: (string) repeat n to m times
-
-  - other :: (any) DEFAULT-QUANTIFIER (or repeat >= 1 times)
-
-See docstring of `drx-make' for more information."
-  (let ((fallback (or default-quantifier "\\{1,\\}")))
+  "Calculate quantifier based on SPEC and DEFAULT-QUANTIFIER.
+See docstring of `drx' for more information."
+  (let ((fallback (or default-quantifier "")))
     (cond
      ;; nil or empty string or white string
      ((or
-       (not spec)
+       (booleanp spec)
        (and (stringp spec) (string= spec ""))
        (and (stringp spec) (not (org-string-nw-p spec))))
       "") 
@@ -184,17 +169,19 @@ results."
 	       (let ((--quantifier
 		      (if zip-list (cdr-safe --elem) --elem)))
 		 (concat
+		  ;; (if  --quantifier "\\(" "")
 		  (if (and --quantifier
-			   (or (symbolp --quantifier)
-			       (consp --quantifier)))
+		  	   (or (symbolp --quantifier)
+		  	       (consp --quantifier)))
 		      "\\(" "")
 		  (if zip-list
 		      (or (car-safe (car-safe --elem))
 			  (car-safe --elem))
 		    rgxps)
+		  ;; (if  --quantifier "\\)" "")
 		  (if (and --quantifier
-			   (or (symbolp --quantifier)
-			       (consp --quantifier)))
+		  	   (or (symbolp --quantifier)
+		  	       (consp --quantifier)))
 		      "\\)" "")
 		  (cond
 		   ((or (not --quantifier)
@@ -288,6 +275,10 @@ on argument value
 
   - \"xyz\" :: (any other string) repeat once
 
+Note that, when used with STARS and ENCLOSING, t almost always
+means 'enclose and repeat once', while 1 and \"1\" stand for
+'do not enclose, repeat once' - depending on the context.
+
 These atomic values can be wrapped in a list and change their
 meaning then. In a list of length 1 they specify 'enclose element
 first, apply repeater then'. In a list of lenght > 1 the specifier
@@ -301,21 +292,17 @@ Here are two calls of 'drx' with interchanged list arguments to
 STARS and ENCLOSING and their return values, demonstrating the
 above:
 
- ,------------------------------------------------------
- | (drx \"foo\" t '(nil t (2)) t '(t nil (2))
- |      \"bar\" \"loo\")
+  ,------------------------------------------------------------
+  | (drx \"foo\" t '(nil t (2)) t '(t nil (2))
+  |      \"bar\" \"loo\")
+  | \"^\\(\\*\\)\\(\\*\\)\\{2\\}\\(foobar\\(loo\\)\\{2\\}\\)$\"
+  `------------------------------------------------------------
 
- ;; | \"^\\*\\(\\*\\)\\{2\\}\\(foobar\\(loo\\)\\{2\\}\\)$\"
-
- `------------------------------------------------------
-
- ,------------------------------------------------------
- | (drx \"foo\" t '(t nil (2)) t '(nil t (2))
- |       \"bar\" \"loo\")
-
- ;; | \"^\\(\\*\\(\\*\\)\\{2\\}\\)foobar\\(loo\\)\\{2\\}$\"
-
- `------------------------------------------------------
+  ,------------------------------------------------------------
+  | (drx \"foo\" t '(t nil (2)) t '(nil t (2))
+  |       \"bar\" \"loo\")
+  | \"^\\(\\*\\(\\*\\)\\{2\\}\\)foo\\(bar\\)\\(loo\\)\\{2\\}$\"
+  `------------------------------------------------------------
 
 Many more usage examples with their expected outcome can be found as
 ERT tests in the test-section of drx.el and should be consulted in
@@ -351,6 +338,7 @@ They create regexp groups but don't apply repeaters to them."
 				  quantifier
 				(concat star quantifier))))
     (case enclosing
+      ;; make regexp alternatives
       ('alt 
        (concat (if bolp drx-BOL "")
 	       star-and-quantifier
@@ -364,6 +352,7 @@ They create regexp groups but don't apply repeaters to them."
 		 "")
 	       "\\)"
 	       (if eolp drx-EOL "")))
+      ;; make regexp groups
       ('grp
        (concat (if bolp drx-BOL "")
 	       star-and-quantifier
@@ -374,6 +363,7 @@ They create regexp groups but don't apply repeaters to them."
 		    rgxps "")
 		 "")
 	       (if eolp drx-EOL "")))
+      ;; make shy regexp groups
       ('shy
        (concat (if bolp drx-BOL "")
 	       star-and-quantifier
@@ -384,6 +374,8 @@ They create regexp groups but don't apply repeaters to them."
 		    rgxps "")
 		 "")
 	       (if eolp drx-EOL "")))
+      ;; make regexp groups appending elements that are groups
+      ;; themselves (do not enclose them again)
       ('app
        (concat (if bolp drx-BOL "")
 	       star-and-quantifier
@@ -397,52 +389,111 @@ They create regexp groups but don't apply repeaters to them."
 		    rgxps "")
 		 "")
 	       (if eolp drx-EOL "")))
-      (t (let ((processed-rgxps
+      ;; others
+      (t (let ((preprocessed-rgxps
 		(cond
+		 ;; RGXPS, ENCLOSING is list 
 		 ((and rgxps (consp enclosing))
 		  (drx-process-specs-list enclosing rgxps))
+		 ;; RGXPS
 		 (rgxps (mapconcat 'identity rgxps ""))
+		 ;; not RGXPS
 		 (t ""))))
-	   (concat (if bolp drx-BOL "")
-		   star-and-quantifier
-		   (cond
-		    ((not enclosing) "")
-		    ((consp enclosing)
-		     (if (car-safe enclosing) "\\(" ""))
-		    (t "\\("))
-		   rgxp
-		   (if (not (org-string-nw-p processed-rgxps))
-		       (cond
-			 ((not enclosing) "")
-			 ((integerp enclosing)
-			  (if (eq enclosing 1)
-			      "\\)"
-			    (concat "\\)\\{"
-				    (number-to-string enclosing)
-				    "\\}")))
-			 ((org-string-nw-p enclosing)
-			    (concat "\\)"
-				    (drx-calc-quantifier
-				     enclosing "")))
-			 (t "\\)")) "")
-		   processed-rgxps
-		   (if (org-string-nw-p processed-rgxps)
-		       (cond
-			((not enclosing) "")
-			((integerp enclosing)
-			 (if (eq enclosing 1)
-			     "\\)"
-			   (concat "\\)\\{"
-				   (number-to-string enclosing)
-				   "\\}")))
-			((org-string-nw-p enclosing)
-			 (concat "\\)"
-				 (drx-calc-quantifier
-				  enclosing "")))
-			((consp enclosing)
-			 (if (car-safe enclosing) "\\)" ""))
-			(t "\\)")) "")
-		   (if eolp drx-EOL "")))))))
+	   (concat
+	    ;; BOL
+	    (if bolp drx-BOL "")
+	    ;; STARS
+	    star-and-quantifier
+	    ;; enclose RGXP
+	    (cond
+	     ;; no ENCLOSING
+	     ((not enclosing) "")
+	     ;; ENCLOSING is list
+	     ((consp enclosing)
+	      (let ((--grp (car-safe enclosing)))
+		(cond
+		 ;; car matches "?:" and "?num:"
+		 ((and (org-string-nw-p --grp)
+		       (save-match-data
+			 (string-match
+			  "\\?[[:digit:]]*:" --grp))) 
+		  (concat "\\(" --grp))
+		 ;; car is non-nil
+		 (--grp "\\(")
+		 ;; else
+		 (t ""))))
+	     (t "\\("))
+	    ;; RGXP
+	    rgxp
+	    ;; no RGXPS => enclose RGXP
+	    (if (not (org-string-nw-p preprocessed-rgxps))
+		(cond
+		 ;; no ENCLOSING
+		 ((not enclosing) "")
+		 ;; ENCLOSING is integer
+		 ((integerp enclosing)
+		  (if (eq enclosing 1)
+		      ;; int=1
+		      "\\)"
+		    ;; else
+		    (concat "\\)\\{"
+			    (number-to-string enclosing)
+			    "\\}")))
+		 ;; ENCLOSING is non-white string
+		 ((org-string-nw-p enclosing)
+		  (concat "\\)"
+			  (drx-calc-quantifier
+			   enclosing "")))
+		 ;; ENCLOSING is list
+		 ((consp enclosing)
+		  (let ((--quant
+			 (car-safe (cdr-safe enclosing))))
+		    (cond
+		     ;; cdr is integer
+		     ((integerp --quant)
+		      (if (eq --quant 1)
+			  ;; int=1
+			  "\\)"
+			;; else
+			(concat "\\)\\{"
+				(number-to-string --quant)
+				"\\}"))
+		      ;; cdr is non-white string
+		      ((org-string-nw-p --quant)
+		       (concat "\\)"
+			       (drx-calc-quantifier
+				--quant "")))
+		      ;; else
+		      (t "\\)")))))
+		 ;; else
+		 (t "\\)")) "")
+	    ;; RGXPS
+	    preprocessed-rgxps
+	    ;; => enclose combined RGXP and RGXPS 
+	    (if (org-string-nw-p preprocessed-rgxps)
+		(cond
+		 ;; no ENCLOSING
+		 ((not enclosing) "")
+		 ;; ENCLOSING is integer
+		 ((integerp enclosing)
+		  (if (eq enclosing 1)
+		      ;; int=1
+		      "\\)"
+		    ;; else
+		    (concat "\\)\\{"
+			    (number-to-string enclosing)
+			    "\\}")))
+		 ;; ENCLOSING is non-white string 
+		 ((org-string-nw-p enclosing)
+		  (concat "\\)"
+			  (drx-calc-quantifier
+			   enclosing "")))
+		 ;; ENCLOSING is list
+		 ((consp enclosing)
+		  (if (car-safe enclosing) "\\)" ""))
+		 (t "\\)")) "")
+	    ;; EOL
+	    (if eolp drx-EOL "")))))))
 
 ;;;; Commands
 
@@ -545,19 +596,19 @@ Assumes the following variable definitions:
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t t t)
-	   "^\\*\\{1,\\}foo$")))
+	   "^\\*foo$")))
 
 (ert-deftest drx-test-6 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t 'bar t)
-	   "^\\*\\{1,\\}foo$")))
+	   "^\\*foo$")))
 
 (ert-deftest drx-test-7 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t "bar" t)
-	   "^\\*\\{1,\\}foo$")))
+	   "^\\*foo$")))
 
 ;; add drx-BOL and append drx-EOL
 ;; and add drx-STAR with specified quantifiers
@@ -649,113 +700,149 @@ Assumes the following variable definitions:
 (ert-deftest drx-test-22 ()
   "See docstring of `drx-test-1'."
   (should (equal
+	   (drx "foo" nil '((t) t) nil)
+	   "\\(\\(\\*\\)\\)foo")))
+
+(ert-deftest drx-test-23 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil '((t) nil) nil)
+	   "\\(\\*\\)foo")))
+
+(ert-deftest drx-test-24 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil '("2,4" t) nil)
+	   "\\(\\(\\*\\)\\)\\{2,4\\}foo")))
+
+(ert-deftest drx-test-25 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil '("2,4" nil) nil)
+	   "\\(\\*\\)\\{2,4\\}foo")))
+
+(ert-deftest drx-test-26 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil '(("2,4") t) nil)
+	   "\\(\\(\\*\\)\\)foo")))
+
+(ert-deftest drx-test-27 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil '(("2,4") nil) nil)
+	   "\\(\\*\\)foo")))
+
+(ert-deftest drx-test-28 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
 	   (drx "foo" nil '(nil "+") nil)
 	   "\\*+foo")))
 
-(ert-deftest drx-test-23 ()
+(ert-deftest drx-test-29 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "*") nil)
 	   "\\**foo")))
 
-(ert-deftest drx-test-24 ()
+(ert-deftest drx-test-30 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "?") nil)
 	   "\\*?foo")))
 
-(ert-deftest drx-test-25 ()
+(ert-deftest drx-test-31 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "+?") nil)
 	   "\\*+?foo")))
 
-(ert-deftest drx-test-26 ()
+(ert-deftest drx-test-32 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "*?") nil)
 	   "\\**?foo")))
 
-(ert-deftest drx-test-27 ()
+(ert-deftest drx-test-33 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "??") nil)
 	   "\\*??foo")))
 
-(ert-deftest drx-test-28 ()
+(ert-deftest drx-test-34 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "1,") nil)
 	   "\\*\\{1,\\}foo")))
 
-(ert-deftest drx-test-29 ()
+(ert-deftest drx-test-35 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil ("1,")) nil)
   	   "\\(\\*\\)\\{1,\\}foo")))
 
-(ert-deftest drx-test-30 ()
+(ert-deftest drx-test-36 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil ",2") nil)
 	   "\\*\\{,2\\}foo")))
 
-(ert-deftest drx-test-31 ()
+(ert-deftest drx-test-37 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil (",2")) nil)
 	   "\\(\\*\\)\\{,2\\}foo")))
 
-(ert-deftest drx-test-32 ()
+(ert-deftest drx-test-38 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil "1,2") nil)
 	   "\\*\\{1,2\\}foo")))
 
-(ert-deftest drx-test-33 ()
+(ert-deftest drx-test-39 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil ("1,2")) nil)
 	   "\\(\\*\\)\\{1,2\\}foo")))
 
-(ert-deftest drx-test-34 ()
+(ert-deftest drx-test-40 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil (2)) nil)
   	   "\\(\\*\\)\\{2\\}foo")))
 
-(ert-deftest drx-test-35 ()
+(ert-deftest drx-test-41 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil 2) nil)
   	   "\\*\\{2\\}foo")))
 
-(ert-deftest drx-test-36 ()
+(ert-deftest drx-test-42 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil (1)) nil)
   	   "\\(\\*\\)foo")))
 
-(ert-deftest drx-test-37 ()
+(ert-deftest drx-test-43 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil '(nil 1) nil)
 	   "\\*foo")))
 
-(ert-deftest drx-test-38 ()
+(ert-deftest drx-test-44 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(nil 2 ("2,3") "3") nil)
   	   "\\*\\{2\\}\\(\\*\\)\\{2,3\\}\\*\\{3\\}foo")))
 
-(ert-deftest drx-test-39 ()
+(ert-deftest drx-test-45 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil '(",3" (2) ("2,3") 3) nil)
   	   "\\(\\(\\*\\)\\{2\\}\\(\\*\\)\\{2,3\\}\\*\\{3\\}\\\)\\{,3\\}foo")))
 
 ;; temporarily change BOL and EOL e.g. using CSS comment syntax
-(ert-deftest drx-test-40 ()
+(ert-deftest drx-test-46 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (let ((drx-BOL (concat "^" (regexp-quote "/* ")))
@@ -764,14 +851,14 @@ Assumes the following variable definitions:
 	   "^/\\* foo\\*/$")))
 
 ;; temporarily change STAR using Elisp syntax
-(ert-deftest drx-test-41 ()
+(ert-deftest drx-test-47 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (let ((drx-STAR ";"))
 	     (drx " foo" nil 2))
 	   ";\\{2\\} foo")))
 
-(ert-deftest drx-test-42 ()
+(ert-deftest drx-test-48 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (let ((drx-BOL "^;;")
@@ -780,7 +867,7 @@ Assumes the following variable definitions:
 	   "^;;\\(;\\{2\\}\\)\\{2\\} foo")))
 
 ;; temporarily change STAR to whitespace syntax
-(ert-deftest drx-test-43 ()
+(ert-deftest drx-test-49 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (let ((drx-STAR "[ \t]"))
@@ -788,197 +875,245 @@ Assumes the following variable definitions:
   	   "^[ 	]* foo")))
 
 ;; enclose rgxp
-(ert-deftest drx-test-44 ()
+(ert-deftest drx-test-50 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil t)
 	   "\\(foo\\)")))
 
-(ert-deftest drx-test-45 ()
+(ert-deftest drx-test-51 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t t t t)
-	   "^\\*\\{1,\\}\\(foo\\)$")))
+	   "^\\*\\(foo\\)$")))
 
-(ert-deftest drx-test-46 ()
+(ert-deftest drx-test-52 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'alt "bar")
 	   "\\(foo\\|bar\\)")))
 
-(ert-deftest drx-test-47 ()
+(ert-deftest drx-test-53 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'grp "bar")
 	   "\\(foo\\)\\(bar\\)")))
 
-(ert-deftest drx-test-48 ()
+(ert-deftest drx-test-54 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'shy "bar")
 	   "\\(?:foo\\)\\(?:bar\\)")))
 
-(ert-deftest drx-test-49 ()
+(ert-deftest drx-test-55 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'app "bar")
 	   "\\(foo\\)\\(bar\\)")))
 
-(ert-deftest drx-test-50 ()
+(ert-deftest drx-test-56 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'app "\\(bar\\)")
 	   "\\(foo\\)\\(bar\\)")))
 
-(ert-deftest drx-test-51 ()
+(ert-deftest drx-test-57 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'grp "\\(bar\\)")
 	   "\\(foo\\)\\(\\(bar\\)\\)")))
 
-(ert-deftest drx-test-52 ()
+(ert-deftest drx-test-58 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil 'alt "bar")
   	   "\\(foo\\|bar\\)")))
 
-(ert-deftest drx-test-53 ()
+(ert-deftest drx-test-59 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil t)
   	   "\\(foo\\)")))
 
-(ert-deftest drx-test-54 ()
+(ert-deftest drx-test-60 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil 2)
   	   "\\(foo\\)\\{2\\}")))
 
-(ert-deftest drx-test-55 ()
+(ert-deftest drx-test-61 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "2")
   	   "\\(foo\\)\\{2\\}")))
 
-(ert-deftest drx-test-56 ()
+(ert-deftest drx-test-62 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil 1)
   	   "\\(foo\\)")))
 
-(ert-deftest drx-test-57 ()
+(ert-deftest drx-test-63 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "1")
   	   "\\(foo\\)")))
 
-(ert-deftest drx-test-58 ()
+(ert-deftest drx-test-64 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "1,")
   	   "\\(foo\\)\\{1,\\}")))
 
-(ert-deftest drx-test-59 ()
+(ert-deftest drx-test-65 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil ",1")
   	   "\\(foo\\)\\{,1\\}")))
 
-(ert-deftest drx-test-60 ()
+(ert-deftest drx-test-66 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "1,3")
   	   "\\(foo\\)\\{1,3\\}")))
 
-(ert-deftest drx-test-61 ()
+(ert-deftest drx-test-67 ()
   "See docstring of `drx-test-1'."
   (should (equal
   	   (drx "foo" nil nil nil "bar")
   	   "\\(foo\\)")))
 
-(ert-deftest drx-test-62 ()
+(ert-deftest drx-test-68 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil nil "bar" "loo")
 	   "foobarloo")))
 
-(ert-deftest drx-test-63 ()
+(ert-deftest drx-test-69 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil t "bar" "loo")
 	   "\\(foobarloo\\)")))
 
-(ert-deftest drx-test-64 ()
+(ert-deftest drx-test-70 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'grp "bar" "loo")
 	   "\\(foo\\)\\(bar\\)\\(loo\\)")))
 
-(ert-deftest drx-test-65 ()
+(ert-deftest drx-test-71 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil 'alt "bar" "loo")
 	   "\\(foo\\|bar\\|loo\\)")))
 
-(ert-deftest drx-test-66 ()
+(ert-deftest drx-test-72 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t nil t 'shy "bar" "loo")
 	   "^\\(?:foo\\)\\(?:bar\\)\\(?:loo\\)$")))
 
-(ert-deftest drx-test-67 ()
+(ert-deftest drx-test-73 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t t t 'app "\\(bar\\)" "loo")
-	   "^\\*\\{1,\\}\\(foo\\)\\(bar\\)\\(loo\\)$")))
+	   "^\\*\\(foo\\)\\(bar\\)\\(loo\\)$")))
 
-(ert-deftest drx-test-68 ()
+(ert-deftest drx-test-74 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t 1 t 'grp "\\(bar\\)" "loo")
 	   "^\\*\\(foo\\)\\(\\(bar\\)\\)\\(loo\\)$")))
 
-(ert-deftest drx-test-69 ()
+(ert-deftest drx-test-75 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" t 2 t 'app "\\(bar\\)" "loo")
 	   "^\\*\\{2\\}\\(foo\\)\\(bar\\)\\(loo\\)$")))
 
-(ert-deftest drx-test-70 ()
+(ert-deftest drx-test-76 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil '(nil) "bar" "loo")
 	   "foobarloo")))
 
-(ert-deftest drx-test-71 ()
+(ert-deftest drx-test-77 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil '(nil nil) "bar" "loo")
 	   "foobarloo")))
 
-(ert-deftest drx-test-72 ()
+(ert-deftest drx-test-78 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil '(t) "bar" "loo")
 	   "\\(foobarloo\\)")))
 
-(ert-deftest drx-test-73 ()
+(ert-deftest drx-test-79 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil '(t t) "bar" "loo")
 	   "\\(foo\\(bar\\)loo\\)")))
 
-(ert-deftest drx-test-74 ()
+(ert-deftest drx-test-80 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil '(t nil t) "bar" "loo")
 	   "\\(foobar\\(loo\\)\\)")))
 
-(ert-deftest drx-test-75 ()
+(ert-deftest drx-test-81 ()
   "See docstring of `drx-test-1'."
   (should (equal
 	   (drx "foo" nil nil nil '(t t t) "bar" "loo")
 	   "\\(foo\\(bar\\)\\(loo\\)\\)")))
+
+(ert-deftest drx-test-82 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" nil nil nil '(1 1 1) "bar" "loo")
+	   "\\(foobarloo\\)")))
+
+(ert-deftest drx-test-83 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" t '(t t t) t '(t t t) "bar" "loo")
+	   "^\\(\\(\\*\\)\\(\\*\\)\\)\\(foo\\(bar\\)\\(loo\\)\\)$")))
+
+(ert-deftest drx-test-84 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" 1 '(1 1 1) 1 '(1 1 1) "bar" "loo")
+	   "^\\(\\*\\*\\)\\(foobarloo\\)$")))
+
+
+(ert-deftest drx-test-85 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" "1" '("1" "1" "1") "1" '("1" "1" "1")
+		"bar" "loo")
+	   "^\\(\\*\\*\\)\\(foobarloo\\)$")))
+
+;; org-heading-regexp "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$"
+(ert-deftest drx-test-86 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*" t nil t)
+	   "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$")))
+
+;; org-heading-regexp "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$"
+(ert-deftest drx-test-87 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "\\(?: +\\(.*?\\)\\)?[ \t]*" t '(t "+") t)
+	   "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$")))
+
+;; org-heading-regexp "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$"
+(ert-deftest drx-test-88 ()
+  "See docstring of `drx-test-1'."
+  (should (equal
+	   (drx "foo" t '(t "+") t '("2" "?:" "*?") " " ".")
+	   "^\\(\\*+\\)\\(?: +\\(.*?\\)\\)?[ \t]*$")))
+
 
 
 ;;; Provide
